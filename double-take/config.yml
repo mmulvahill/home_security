@@ -1,0 +1,39 @@
+# Double-Take Configuration
+# Face recognition coordinator for home security system
+
+mqtt:
+  host: mqtt
+  port: 1883
+  topic: double-take
+
+frigate:
+  url: http://frigate:5000
+  topic: frigate/events
+
+detectors:
+  compreface:
+    url: http://compreface-api:8080
+    key: ${COMPREFACE_API_KEY}
+    det_prob_threshold: 0.8
+    face_plugins: landmarks,gender,age
+    status_codes:
+      - 200
+      - 404
+
+detect:
+  match:
+    save: true
+    base64: false
+    min_area: 10000
+  unknown:
+    save: true
+
+time:
+  timezone: America/Chicago
+
+# Camera configuration
+# NOTE: This will be updated when the doorbell camera is added
+# cameras:
+#   front_door:
+#     zones:
+#       - camera: front_door

@@ -1,0 +1,191 @@
+version: "3.9"
+
+services:
+  # ============================================
+  # MQTT BROKER - Central message bus
+  # ============================================
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: mqtt
+    restart: unless-stopped
+    volumes:
+      - ./mosquitto/config:/mosquitto/config:ro
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================
+  # FRIGATE - NVR with GPU object detection
+  # ============================================
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:stable-tensorrt
+    container_name: frigate
+    restart: unless-stopped
+    privileged: true
+    shm_size: "512mb"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu, video, compute]
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./frigate/config:/config
+      - ${NFS_FRIGATE_PATH:-/mnt/synology/frigate}/recordings:/media/frigate/recordings
+      - ${NFS_FRIGATE_PATH:-/mnt/synology/frigate}/clips:/media/frigate/clips
+      - type: tmpfs
+        target: /tmp/cache
+        tmpfs:
+          size: 1000000000
+    ports:
+      - "5000:5000"
+      - "8554:8554"
+      - "8555:8555/tcp"
+      - "8555:8555/udp"
+    environment:
+      - FRIGATE_RTSP_PASSWORD=${FRIGATE_RTSP_PASSWORD}
+      - DOORBELL_IP=${DOORBELL_IP}
+      - HOST_IP=${HOST_IP}
+      - NVIDIA_VISIBLE_DEVICES=0
+      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+    depends_on:
+      mqtt:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/version"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  # ============================================
+  # COMPREFACE - Face recognition backend
+  # ============================================
+  compreface-postgres:
+    image: postgres:11.5
+    container_name: compreface-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=compreface
+      - POSTGRES_PASSWORD=${COMPREFACE_DB_PASSWORD:-compreface}
+      - POSTGRES_DB=compreface
+    volumes:
+      - ./compreface/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U compreface"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  compreface-admin:
+    image: exadel/compreface-admin:latest
+    container_name: compreface-admin
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=compreface
+      - POSTGRES_PASSWORD=${COMPREFACE_DB_PASSWORD:-compreface}
+      - POSTGRES_URL=jdbc:postgresql://compreface-postgres:5432/compreface
+      - SPRING_PROFILES_ACTIVE=dev
+      - ENABLE_EMAIL_SERVER=false
+      - ADMIN_JAVA_OPTS=-Xmx1g
+    depends_on:
+      compreface-postgres:
+        condition: service_healthy
+
+  compreface-api:
+    image: exadel/compreface-api:latest
+    container_name: compreface-api
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=compreface
+      - POSTGRES_PASSWORD=${COMPREFACE_DB_PASSWORD:-compreface}
+      - POSTGRES_URL=jdbc:postgresql://compreface-postgres:5432/compreface
+      - SPRING_PROFILES_ACTIVE=dev
+      - API_JAVA_OPTS=-Xmx2g
+      - SAVE_IMAGES_TO_DB=true
+    depends_on:
+      compreface-postgres:
+        condition: service_healthy
+
+  compreface:
+    image: exadel/compreface-fe:latest
+    container_name: compreface
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    depends_on:
+      - compreface-admin
+      - compreface-api
+    environment:
+      - CLIENT_MAX_BODY_SIZE=10M
+
+  # ============================================
+  # DOUBLE-TAKE - Face recognition coordinator
+  # ============================================
+  double-take:
+    image: jakowenko/double-take:latest
+    container_name: double-take
+    restart: unless-stopped
+    volumes:
+      - ./double-take:/.storage
+    ports:
+      - "3000:3000"
+    environment:
+      - TZ=America/Chicago
+    depends_on:
+      - mqtt
+      - frigate
+      - compreface
+
+  # ============================================
+  # WHISPER - Speech-to-text (GPU 1)
+  # ============================================
+  whisper:
+    image: onerahmet/openai-whisper-asr-webservice:latest-gpu
+    container_name: whisper
+    restart: unless-stopped
+    profiles:
+      - full  # Only starts with --profile full
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['1']
+              capabilities: [gpu]
+    ports:
+      - "9000:9000"
+    environment:
+      - ASR_MODEL=medium
+      - ASR_ENGINE=faster_whisper
+
+  # ============================================
+  # PLATE RECOGNIZER - ALPR (optional)
+  # ============================================
+  platerecognizer:
+    image: platerecognizer/alpr:latest
+    container_name: platerecognizer
+    restart: unless-stopped
+    profiles:
+      - full  # Only starts with --profile full
+    ports:
+      - "8001:8080"
+    environment:
+      - LICENSE_KEY=${PLATE_RECOGNIZER_KEY:-}
+    volumes:
+      - ./platerecognizer:/user-data
+
+networks:
+  default:
+    name: security-stack
+    driver: bridge

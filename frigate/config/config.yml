@@ -1,0 +1,133 @@
+# Frigate NVR Configuration
+# Local-first AI-powered home security system
+
+mqtt:
+  enabled: true
+  host: mqtt
+  port: 1883
+  topic_prefix: frigate
+  client_id: frigate
+  stats_interval: 60
+
+detectors:
+  tensorrt:
+    type: tensorrt
+    device: 0
+
+model:
+  path: /config/model_cache/tensorrt/yolov7-320.trt
+  input_tensor: nchw
+  input_pixel_format: rgb
+  width: 320
+  height: 320
+
+database:
+  path: /config/frigate.db
+
+ffmpeg:
+  hwaccel_args: preset-nvidia-h264
+  output_args:
+    record: preset-record-generic-audio-aac
+
+go2rtc:
+  streams:
+    front_door:
+      - "rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{DOORBELL_IP}:554/h264Preview_01_main"
+  webrtc:
+    candidates:
+      - "{HOST_IP}:8555"
+      - stun:8555
+
+record:
+  enabled: true
+  retain:
+    days: 14
+    mode: motion
+  events:
+    pre_capture: 5
+    post_capture: 10
+    retain:
+      default: 60
+      mode: active_objects
+
+snapshots:
+  enabled: true
+  clean_copy: true
+  timestamp: true
+  bounding_box: true
+  retain:
+    default: 60
+
+objects:
+  track:
+    - person
+    - car
+    - motorcycle
+    - bicycle
+    - dog
+    - cat
+    - package
+  filters:
+    person:
+      min_area: 5000
+      max_area: 100000
+      threshold: 0.7
+    car:
+      min_area: 10000
+      threshold: 0.7
+
+audio:
+  enabled: true
+  listen:
+    - bark
+    - fire_alarm
+    - glass_breaking
+    - scream
+    - speech
+    - yell
+
+# Camera definitions
+# NOTE: Doorbell camera will be configured when it arrives
+# Uncomment and configure the section below after setting up the camera
+
+# cameras:
+#   front_door:
+#     enabled: true
+#     ffmpeg:
+#       inputs:
+#         - path: rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{DOORBELL_IP}:554/h264Preview_01_sub
+#           roles:
+#             - detect
+#             - audio
+#         - path: rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{DOORBELL_IP}:554/h264Preview_01_main
+#           roles:
+#             - record
+#     detect:
+#       enabled: true
+#       width: 640
+#       height: 480
+#       fps: 10
+#     audio:
+#       enabled: true
+#     objects:
+#       track:
+#         - person
+#         - package
+#       filters:
+#         person:
+#           min_score: 0.6
+#           threshold: 0.7
+#     zones:
+#       porch:
+#         coordinates: 0,480,640,480,640,200,0,200
+#         objects:
+#           - person
+#           - package
+#     snapshots:
+#       enabled: true
+#       bounding_box: true
+#     mqtt:
+#       enabled: true
+#       timestamp: true
+#       bounding_box: true
+#       crop: true
