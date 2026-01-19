@@ -1,0 +1,166 @@
+═══════════════════════════════════════════════════════════════
+HOME SECURITY STACK - DEPLOYMENT CHECKLIST
+═══════════════════════════════════════════════════════════════
+
+PHASE 1: PRE-DEPLOYMENT (Before running setup)
+───────────────────────────────────────────────────────────────
+[ ] Synology NAS configured
+    [ ] NFS service enabled
+    [ ] /volume1/frigate exported with NFS
+    [ ] GPU server IP added to allowed hosts
+
+[ ] GPU Server prerequisites
+    [ ] Docker installed and running
+    [ ] Docker Compose v2 installed
+    [ ] NVIDIA Container Toolkit installed
+    [ ] GPU accessible (test: nvidia-smi)
+    [ ] jq installed (sudo apt install jq)
+    [ ] nc installed (sudo apt install netcat)
+    [ ] curl installed (sudo apt install curl)
+
+[ ] Environment configuration
+    [ ] Copied .env.example to .env
+    [ ] Set FRIGATE_RTSP_PASSWORD (your camera password)
+    [ ] Set HOST_IP (GPU server IP: _______________)
+    [ ] Set SYNOLOGY_IP (NAS IP: _______________)
+    [ ] Set DOORBELL_IP (will set when camera arrives)
+
+[ ] Run validation
+    [ ] make test-pre (all tests pass)
+
+PHASE 2: INITIAL DEPLOYMENT
+───────────────────────────────────────────────────────────────
+[ ] Deploy stack
+    [ ] make setup
+    [ ] No errors during deployment
+    [ ] All services started successfully
+
+[ ] Post-deployment validation
+    [ ] make test-post (all tests pass)
+    [ ] make status (all services running)
+
+[ ] CompreFace configuration
+    [ ] Access http://<HOST_IP>:8000
+    [ ] Create local account
+    [ ] Create "Recognition" service
+    [ ] Copy API key: _________________________________
+    [ ] Add to .env as COMPREFACE_API_KEY
+    [ ] make restart-double-take
+
+[ ] Access all UIs
+    [ ] Frigate: http://<HOST_IP>:5000 ✓
+    [ ] CompreFace: http://<HOST_IP>:8000 ✓
+    [ ] Double-Take: http://<HOST_IP>:3000 ✓
+
+[ ] Set up monitoring
+    [ ] sudo cp scripts/security-stack.cron /etc/cron.d/
+    [ ] sudo systemctl restart cron
+    [ ] Test: ./scripts/health-check.sh
+
+PHASE 3: CAMERA INTEGRATION (When doorbell arrives)
+───────────────────────────────────────────────────────────────
+[ ] Physical setup
+    [ ] Camera mounted
+    [ ] Camera powered
+    [ ] Camera connected to network
+    [ ] Camera IP address: _______________ (static or DHCP reservation)
+    [ ] Camera admin password set
+
+[ ] Network testing
+    [ ] Ping camera from GPU server
+    [ ] Access camera web UI (http://<camera-ip>)
+    [ ] make test-camera IP=<ip> PASS=<pass>
+
+[ ] Configuration
+    [ ] Update .env with DOORBELL_IP
+    [ ] Edit frigate/config/config.yml
+    [ ] Uncomment cameras: section (line ~253)
+    [ ] Save file
+
+[ ] Deployment
+    [ ] make restart-frigate
+    [ ] make logs-frigate (watch for connection)
+    [ ] No errors in logs
+
+[ ] Verification
+    [ ] Open Frigate UI: http://<HOST_IP>:5000
+    [ ] See "front_door" camera listed
+    [ ] Live stream visible
+    [ ] FPS showing (e.g., "10.0 fps")
+
+[ ] Zone configuration
+    [ ] Open Mask & Zone Editor in Frigate
+    [ ] Draw "porch" zone
+    [ ] Save and restart
+
+PHASE 4: TESTING & VALIDATION
+───────────────────────────────────────────────────────────────
+[ ] Object detection
+    [ ] Walk in front of camera
+    [ ] Person detected in Frigate (Review/Events)
+    [ ] Snapshot saved
+    [ ] Recording created
+
+[ ] Face recognition
+    [ ] Person detected and sent to Double-Take
+    [ ] Face appears in Double-Take UI
+    [ ] Train face with name
+    [ ] Next detection recognizes person
+
+[ ] Health monitoring
+    [ ] make health (all checks pass)
+    [ ] Check /var/log/security-stack-health.log
+    [ ] MQTT messages visible in Home Assistant
+
+[ ] Backup system
+    [ ] ./scripts/backup.sh
+    [ ] Verify backup created in /mnt/synology/frigate/backups/
+
+PHASE 5: HOME ASSISTANT INTEGRATION (Optional)
+───────────────────────────────────────────────────────────────
+[ ] MQTT integration
+    [ ] Add MQTT broker: <GPU_SERVER_IP>:1883
+    [ ] Verify connection
+
+[ ] Frigate integration
+    [ ] Install Frigate integration via HACS
+    [ ] Configure with URL: http://<GPU_SERVER_IP>:5000
+    [ ] Cameras appear in Home Assistant
+
+[ ] Automations
+    [ ] Person at door notification
+    [ ] Unknown face alert
+    [ ] Package detection
+
+TROUBLESHOOTING REFERENCE
+───────────────────────────────────────────────────────────────
+Service won't start:
+  → docker logs <service-name>
+  → make logs-<service>
+  
+Camera not connecting:
+  → ./scripts/test-camera.sh <ip> admin <pass>
+  → Check camera web UI accessibility
+  → Verify RTSP credentials
+  
+NFS issues:
+  → sudo mount /mnt/synology/frigate
+  → Check Synology NFS permissions
+  → Verify network connectivity
+  
+Face recognition not working:
+  → Verify COMPREFACE_API_KEY in .env
+  → make logs-double-take
+  → Check CompreFace UI accessible
+
+COMPLETED ✓
+───────────────────────────────────────────────────────────────
+Deployment Date: _______________
+Completed By: _______________
+Camera IP: _______________
+Notes:
+
+
+
+
+═══════════════════════════════════════════════════════════════
