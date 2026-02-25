@@ -1,128 +1,106 @@
 #!/bin/bash
-# Test NFS setup with Synology
-# Run this after updating SYNOLOGY_IP in .env
+# Test NFS connectivity and mount with Synology.
 
-set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib.sh"
+cd "$PROJECT_DIR"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-if [[ ! -f .env ]]; then
-    echo -e "${RED}Error: .env file not found${NC}"
-    exit 1
-fi
-
-source .env
+load_env
 
 echo "=========================================="
 echo "NFS Configuration Test"
 echo "=========================================="
 echo ""
-echo "Synology IP: $SYNOLOGY_IP"
+echo "Synology:    ${SYNOLOGY_IP}"
+echo "NFS export:  ${SYNOLOGY_NFS_EXPORT}"
 echo "Mount point: ${NFS_FRIGATE_PATH:-/mnt/synology/frigate}"
 echo ""
 
 MOUNT_POINT="${NFS_FRIGATE_PATH:-/mnt/synology/frigate}"
-NFS_EXPORT="${SYNOLOGY_IP}:/volume1/frigate"
+NFS_SOURCE="${SYNOLOGY_IP}:${SYNOLOGY_NFS_EXPORT}"
 
-# Test 1: Can we reach Synology?
-echo -n "1. Network connectivity... "
+# Network
+echo -n "Network connectivity... "
 if ping -c 1 -W 2 "$SYNOLOGY_IP" &>/dev/null; then
-    echo -e "${GREEN}[PASS]${NC} Synology reachable"
+    test_pass "Synology reachable"
 else
-    echo -e "${RED}[FAIL]${NC} Cannot ping Synology"
-    echo "   Check network and SYNOLOGY_IP in .env"
+    test_fail "cannot ping Synology"
     exit 1
 fi
 
-# Test 2: Is NFS port open?
-echo -n "2. NFS service... "
+# NFS port
+echo -n "NFS service... "
 if nc -zw2 "$SYNOLOGY_IP" 2049 &>/dev/null; then
-    echo -e "${GREEN}[PASS]${NC} NFS port 2049 open"
+    test_pass "port 2049 open"
 else
-    echo -e "${RED}[FAIL]${NC} NFS port 2049 not accessible"
-    echo "   Enable NFS service on Synology:"
-    echo "   Control Panel → File Services → NFS → Enable NFS"
+    test_fail "port 2049 closed (enable NFS: Control Panel -> File Services -> NFS)"
     exit 1
 fi
 
-# Test 3: Can we showmount?
-echo -n "3. NFS exports... "
-if showmount -e "$SYNOLOGY_IP" 2>/dev/null | grep -q "/volume1/frigate"; then
-    echo -e "${GREEN}[PASS]${NC} /volume1/frigate is exported"
+# NFS exports
+echo -n "NFS exports... "
+if showmount -e "$SYNOLOGY_IP" 2>/dev/null | grep -qF "$SYNOLOGY_NFS_EXPORT"; then
+    test_pass "$SYNOLOGY_NFS_EXPORT exported"
 else
-    echo -e "${YELLOW}[WARN]${NC} /volume1/frigate not found in exports"
+    test_fail "$SYNOLOGY_NFS_EXPORT not found in exports"
     echo ""
-    echo "   Current exports from $SYNOLOGY_IP:"
-    showmount -e "$SYNOLOGY_IP" 2>/dev/null || echo "   (none or permission denied)"
+    echo "   Current exports:"
+    showmount -e "$SYNOLOGY_IP" 2>/dev/null | sed 's/^/   /' || echo "   (none)"
     echo ""
-    echo "   On Synology, create NFS share:"
-    echo "   Control Panel → Shared Folder → Create 'frigate'"
-    echo "   Then: Control Panel → Shared Folder → Edit 'frigate' → NFS Permissions"
+    echo "   On Synology: Shared Folder -> Edit -> NFS Permissions"
     echo "   Add: ${HOST_IP} with read/write access"
     exit 1
 fi
 
-# Test 4: Create mount point
-echo -n "4. Mount point... "
-if [[ ! -d "$MOUNT_POINT" ]]; then
+# Mount point
+echo -n "Mount point... "
+if [[ -d "$MOUNT_POINT" ]]; then
+    test_pass "$MOUNT_POINT exists"
+else
     echo -n "creating... "
     sudo mkdir -p "$MOUNT_POINT"
+    test_pass "created $MOUNT_POINT"
 fi
-echo -e "${GREEN}[PASS]${NC} $MOUNT_POINT exists"
 
-# Test 5: Already mounted?
-echo -n "5. Mount status... "
+# Mount status
+echo -n "Mount status... "
 if mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
-    echo -e "${GREEN}[INFO]${NC} Already mounted"
+    test_pass "already mounted"
 else
-    echo -e "${YELLOW}[INFO]${NC} Not mounted, attempting..."
-
-    # Try to mount
-    if sudo mount -t nfs "${NFS_EXPORT}" "$MOUNT_POINT" 2>/dev/null; then
-        echo -e "${GREEN}[PASS]${NC} Successfully mounted"
+    if sudo mount -t nfs "$NFS_SOURCE" "$MOUNT_POINT" 2>/dev/null; then
+        test_pass "mounted successfully"
     else
-        echo -e "${RED}[FAIL]${NC} Mount failed"
-        echo ""
-        echo "   Check Synology NFS permissions:"
-        echo "   - This server's IP (${HOST_IP}) must be in allowed hosts"
-        echo "   - Permissions should be: read/write, no_root_squash"
+        test_fail "mount failed (check Synology NFS permissions for ${HOST_IP})"
         exit 1
     fi
 fi
 
-# Test 6: Write test
-echo -n "6. Write permission... "
-TEST_FILE="$MOUNT_POINT/.write-test-$$"
-if touch "$TEST_FILE" 2>/dev/null; then
-    rm "$TEST_FILE"
-    echo -e "${GREEN}[PASS]${NC} Can write to NFS share"
+# Write test (try as current user first, fall back to sudo since Docker runs as root)
+echo -n "Write permission... "
+test_file="$MOUNT_POINT/.write-test-$$"
+if touch "$test_file" 2>/dev/null; then
+    rm "$test_file"
+    test_pass "writable (user)"
+elif sudo touch "$test_file" 2>/dev/null; then
+    sudo rm "$test_file"
+    test_warn "writable as root only (Frigate will work, but consider setting Squash to 'No mapping' on Synology)"
 else
-    echo -e "${RED}[FAIL]${NC} Cannot write to NFS share"
-    echo "   Check Synology permissions - needs read/write access"
+    test_fail "not writable (check Synology NFS permissions)"
     exit 1
 fi
 
-# Test 7: Add to fstab?
-echo -n "7. fstab entry... "
-if grep -q "$NFS_EXPORT" /etc/fstab 2>/dev/null; then
-    echo -e "${GREEN}[INFO]${NC} Already in fstab"
+# fstab
+echo -n "fstab entry... "
+if grep -qF "$NFS_SOURCE" /etc/fstab 2>/dev/null; then
+    test_pass "present"
 else
-    echo -e "${YELLOW}[INFO]${NC} Not in fstab"
-    echo ""
-    echo "   To auto-mount on boot, run:"
-    echo "   echo '$NFS_EXPORT $MOUNT_POINT nfs rw,hard,intr,noatime 0 0' | sudo tee -a /etc/fstab"
+    test_warn "not in fstab (will not auto-mount on boot)"
+    echo "   To add: echo '${NFS_SOURCE} ${MOUNT_POINT} nfs rw,hard,intr,noatime 0 0' | sudo tee -a /etc/fstab"
 fi
 
 echo ""
-echo -e "${GREEN}=========================================="
-echo "✓ NFS Ready"
-echo "==========================================${NC}"
-echo ""
-echo "Mount point: $MOUNT_POINT"
 echo "Available space:"
 df -h "$MOUNT_POINT" | tail -1
 echo ""
-echo "You're ready to proceed with: make setup"
+
+test_summary "NFS Test Results"

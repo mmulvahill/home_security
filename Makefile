@@ -1,51 +1,47 @@
 # Home Security Stack - Makefile
-# Common operations for managing the security stack
 
-.PHONY: help setup start stop restart logs status update health test-pre test-post gpu backup
+.PHONY: help deploy setup start stop restart status logs health gpu update backup clean \
+        test-pre test-post test-camera
 
-COMPOSE = docker compose
-SERVICES = mqtt frigate compreface-postgres compreface-admin compreface-api compreface double-take
+COMPOSE := docker compose
+SERVICES := mqtt frigate compreface-postgres compreface-admin compreface-api compreface-core compreface double-take
 
 help:
-	@echo "Home Security Stack Operations"
+	@echo "Home Security Stack"
 	@echo ""
-	@echo "Usage: make <target>"
+	@echo "Lifecycle:"
+	@echo "  deploy       Idempotent deploy (setup + start + verify)"
+	@echo "  start        Start all services"
+	@echo "  stop         Stop all services"
+	@echo "  restart      Restart all services"
+	@echo "  update       Pull latest images and redeploy"
 	@echo ""
-	@echo "Setup & Deployment:"
-	@echo "  setup        - Initial setup (run once)"
-	@echo "  start        - Start all services"
-	@echo "  stop         - Stop all services"
-	@echo "  restart      - Restart all services"
-	@echo "  update       - Pull latest images and restart"
-	@echo ""
-	@echo "Monitoring & Logs:"
-	@echo "  status       - Show service status and endpoints"
-	@echo "  logs         - Tail logs for all services"
-	@echo "  health       - Run health check"
-	@echo "  gpu          - Monitor GPU usage"
-	@echo ""
-	@echo "Service-specific:"
-	@echo "  logs-SERVICE    - Tail logs for specific service"
-	@echo "  restart-SERVICE - Restart specific service"
-	@echo "  shell-SERVICE   - Get shell in container"
-	@echo ""
-	@echo "Examples:"
-	@echo "  make logs-frigate"
-	@echo "  make restart-frigate"
-	@echo "  make shell-mqtt"
+	@echo "Monitoring:"
+	@echo "  status       Show service status and endpoints"
+	@echo "  logs         Tail all service logs"
+	@echo "  logs-NAME    Tail logs for one service (e.g. make logs-frigate)"
+	@echo "  health       Run health check"
+	@echo "  gpu          Watch GPU utilization"
 	@echo ""
 	@echo "Testing:"
-	@echo "  test-pre     - Run pre-deployment tests"
-	@echo "  test-post    - Run post-deployment tests"
-	@echo "  test-camera  - Test camera connectivity (requires IP)"
+	@echo "  test-pre     Pre-deployment validation"
+	@echo "  test-post    Post-deployment validation"
+	@echo "  test-camera  Test camera (make test-camera IP=x PASS=y)"
 	@echo ""
 	@echo "Maintenance:"
-	@echo "  backup       - Backup configurations"
-	@echo "  clean        - Remove stopped containers and volumes"
+	@echo "  backup       Backup configurations to NFS"
+	@echo "  clean        Remove stopped containers and volumes"
 	@echo ""
+	@echo "Service shortcuts:"
+	@echo "  restart-NAME  Restart one service (e.g. make restart-frigate)"
+	@echo "  shell-NAME    Shell into container (e.g. make shell-mqtt)"
 
-setup:
+# --- Lifecycle ---
+
+deploy:
 	@./scripts/setup.sh
+
+setup: deploy
 
 start:
 	$(COMPOSE) up -d $(SERVICES)
@@ -56,14 +52,13 @@ stop:
 restart:
 	$(COMPOSE) restart $(SERVICES)
 
-logs:
-	$(COMPOSE) logs -f --tail=100
+update:
+	@echo "Pulling latest images..."
+	$(COMPOSE) pull
+	$(COMPOSE) up -d $(SERVICES)
+	@echo "Update complete."
 
-logs-%:
-	$(COMPOSE) logs -f --tail=100 $*
-
-restart-%:
-	$(COMPOSE) restart $*
+# --- Monitoring ---
 
 status:
 	@echo "======================================"
@@ -78,14 +73,12 @@ status:
 	@echo "CompreFace:  http://localhost:8000"
 	@echo "Double-Take: http://localhost:3000"
 	@echo "MQTT:        mqtt://localhost:1883"
-	@echo ""
 
-update:
-	@echo "Pulling latest images..."
-	$(COMPOSE) pull
-	@echo "Restarting services..."
-	$(COMPOSE) up -d $(SERVICES)
-	@echo "Update complete!"
+logs:
+	$(COMPOSE) logs -f --tail=100
+
+logs-%:
+	$(COMPOSE) logs -f --tail=100 $*
 
 health:
 	@./scripts/health-check.sh
@@ -93,8 +86,15 @@ health:
 gpu:
 	@watch -n 1 nvidia-smi
 
+# --- Service shortcuts ---
+
+restart-%:
+	$(COMPOSE) restart $*
+
 shell-%:
 	@docker exec -it $* /bin/bash 2>/dev/null || docker exec -it $* /bin/sh
+
+# --- Testing ---
 
 test-pre:
 	@./scripts/test-pre-deploy.sh
@@ -103,26 +103,25 @@ test-post:
 	@./scripts/test-post-deploy.sh
 
 test-camera:
-	@echo "Usage: make test-camera IP=<camera-ip> PASS=<password>"
-	@if [ -z "$(IP)" ] || [ -z "$(PASS)" ]; then \
-		echo "Error: IP and PASS variables required"; \
-		echo "Example: make test-camera IP=192.168.1.100 PASS=mypassword"; \
-		exit 1; \
-	fi
+ifndef IP
+	$(error Usage: make test-camera IP=<camera-ip> PASS=<password>)
+endif
+ifndef PASS
+	$(error Usage: make test-camera IP=<camera-ip> PASS=<password>)
+endif
 	@./scripts/test-camera.sh $(IP) admin $(PASS)
 
+# --- Maintenance ---
+
 backup:
-	@if [ ! -f scripts/backup.sh ]; then \
-		echo "Backup script not yet created"; \
-		exit 1; \
-	fi
 	@./scripts/backup.sh
 
 clean:
 	$(COMPOSE) down -v
-	@echo "Cleaned up containers and volumes"
+	@echo "Cleaned up containers and volumes."
 
-# Development helpers
+# --- Development ---
+
 dev-install:
 	uv sync --all-extras
 

@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   # ============================================
   # MQTT BROKER - Central message bus
@@ -54,8 +52,8 @@ services:
       - "8555:8555/udp"
     environment:
       - FRIGATE_RTSP_PASSWORD=${FRIGATE_RTSP_PASSWORD}
-      - DOORBELL_IP=${DOORBELL_IP}
-      - HOST_IP=${HOST_IP}
+      - FRIGATE_DOORBELL_IP=${DOORBELL_IP}
+      - FRIGATE_HOST_IP=${HOST_IP}
       - NVIDIA_VISIBLE_DEVICES=0
       - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
     depends_on:
@@ -117,6 +115,16 @@ services:
       compreface-postgres:
         condition: service_healthy
 
+  compreface-core:
+    image: exadel/compreface-core:latest
+    container_name: compreface-core
+    restart: unless-stopped
+    environment:
+      - ML_PORT=3000
+    depends_on:
+      compreface-postgres:
+        condition: service_healthy
+
   compreface:
     image: exadel/compreface-fe:latest
     container_name: compreface
@@ -126,8 +134,11 @@ services:
     depends_on:
       - compreface-admin
       - compreface-api
+      - compreface-core
     environment:
       - CLIENT_MAX_BODY_SIZE=10M
+      - PROXY_READ_TIMEOUT=60000
+      - PROXY_CONNECT_TIMEOUT=60000
 
   # ============================================
   # DOUBLE-TAKE - Face recognition coordinator

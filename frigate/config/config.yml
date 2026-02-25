@@ -10,16 +10,9 @@ mqtt:
   stats_interval: 60
 
 detectors:
-  tensorrt:
-    type: tensorrt
-    device: 0
-
-model:
-  path: /config/model_cache/tensorrt/yolov7-320.trt
-  input_tensor: nchw
-  input_pixel_format: rgb
-  width: 320
-  height: 320
+  cpu:
+    type: cpu
+    num_threads: 4
 
 database:
   path: /config/frigate.db
@@ -32,10 +25,10 @@ ffmpeg:
 go2rtc:
   streams:
     front_door:
-      - "rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{DOORBELL_IP}:554/h264Preview_01_main"
+      - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{FRIGATE_DOORBELL_IP}:554/h264Preview_01_main
   webrtc:
     candidates:
-      - "{HOST_IP}:8555"
+      - '{FRIGATE_HOST_IP}:8555'
       - stun:8555
 
 record:
@@ -43,13 +36,16 @@ record:
   retain:
     days: 14
     mode: motion
-  events:
+  alerts:
+    retain:
+      days: 60
     pre_capture: 5
     post_capture: 10
+  detections:
     retain:
-      default: 60
-      mode: active_objects
-
+      days: 60
+    pre_capture: 5
+    post_capture: 10
 snapshots:
   enabled: true
   clean_copy: true
@@ -66,7 +62,6 @@ objects:
     - bicycle
     - dog
     - cat
-    - package
   filters:
     person:
       min_area: 5000
@@ -86,48 +81,47 @@ audio:
     - speech
     - yell
 
-# Camera definitions
-# NOTE: Doorbell camera will be configured when it arrives
-# Uncomment and configure the section below after setting up the camera
-
-# cameras:
-#   front_door:
-#     enabled: true
-#     ffmpeg:
-#       inputs:
-#         - path: rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{DOORBELL_IP}:554/h264Preview_01_sub
-#           roles:
-#             - detect
-#             - audio
-#         - path: rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{DOORBELL_IP}:554/h264Preview_01_main
-#           roles:
-#             - record
-#     detect:
-#       enabled: true
-#       width: 640
-#       height: 480
-#       fps: 10
-#     audio:
-#       enabled: true
-#     objects:
-#       track:
-#         - person
-#         - package
-#       filters:
-#         person:
-#           min_score: 0.6
-#           threshold: 0.7
-#     zones:
-#       porch:
-#         coordinates: 0,480,640,480,640,200,0,200
-#         objects:
-#           - person
-#           - package
-#     snapshots:
-#       enabled: true
-#       bounding_box: true
-#     mqtt:
-#       enabled: true
-#       timestamp: true
-#       bounding_box: true
-#       crop: true
+cameras:
+  front_door:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: 
+            rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{FRIGATE_DOORBELL_IP}:554/Preview_01_sub
+          roles:
+            - detect
+            - audio
+        - path: 
+            rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{FRIGATE_DOORBELL_IP}:554/h264Preview_01_main
+          roles:
+            - record
+    detect:
+      enabled: true
+      width: 640
+      height: 480
+      fps: 10
+    audio:
+      enabled: true
+    objects:
+      track:
+        - person
+      filters:
+        person:
+          min_score: 0.6
+          threshold: 0.7
+    zones:
+      porch:
+        coordinates: 0,480,640,480,640,200,0,200
+        objects:
+          - person
+    snapshots:
+      enabled: true
+      bounding_box: true
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: true
+detect:
+  enabled: true
+version: 0.16-0
