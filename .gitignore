@@ -31,8 +31,19 @@ venv/
 mosquitto/data/
 mosquitto/log/
 double-take/.storage/
+double-take/.ui
+double-take/config/
+double-take/database.db
 compreface/postgres/
 frigate/config/frigate.db
+frigate/config/frigate.db-shm
+frigate/config/frigate.db-wal
+frigate/config/.exports
+frigate/config/.jwt_secret
+frigate/config/.timeline
+frigate/config/.vacuum
+frigate/config/backup.db
+frigate/config/backup_config.yaml
 frigate/config/model_cache/
 platerecognizer/
 whisper/
@@ -63,3 +74,4 @@ htmlcov/
 # Temporary files
 tmp/
 *.tmp
+last_claude_response.md

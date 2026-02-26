@@ -13,7 +13,7 @@ frigate:
 detectors:
   compreface:
     url: http://compreface-api:8080
-    key: ""  # Set after creating recognition service in CompreFace UI
+    key: "6da52744-6cb1-4ff6-90e2-1dd6e8d778de"  # Set after creating recognition service in CompreFace UI
     det_prob_threshold: 0.8
     face_plugins: landmarks,gender,age
     status_codes:

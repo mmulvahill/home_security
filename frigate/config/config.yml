@@ -26,6 +26,8 @@ go2rtc:
   streams:
     front_door:
       - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{FRIGATE_DOORBELL_IP}:554/h264Preview_01_main
+    front_door_sub:
+      - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{FRIGATE_DOORBELL_IP}:554/Preview_01_sub
   webrtc:
     candidates:
       - '{FRIGATE_HOST_IP}:8555'
