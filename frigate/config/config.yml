@@ -124,7 +124,9 @@ cameras:
       enabled: true
       width: 640
       height: 480
-      fps: 10
+      # Doorbell on a busy scene; 5fps detection is plenty and halves the
+      # per-camera CPU (frigate.process:front_door was ~62% of a core at 10fps).
+      fps: 5
     audio:
       enabled: true
     objects:
