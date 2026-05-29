@@ -10,9 +10,20 @@ mqtt:
   stats_interval: 60
 
 detectors:
-  cpu:
-    type: cpu
-    num_threads: 4
+  onnx:
+    type: onnx
+
+# YOLOv9-s exported to ONNX (320x320). Runs on GPU 1 via the onnxruntime CUDA
+# execution provider (stable-tensorrt image). Replaces the old CPU/TFLite
+# detector. Regenerate the .onnx with scripts/export-yolo.sh (see model_cache).
+model:
+  model_type: yolo-generic
+  width: 320
+  height: 320
+  input_tensor: nchw
+  input_dtype: float
+  path: /config/model_cache/yolov9-s-320.onnx
+  labelmap_path: /labelmap/coco-80.txt
 
 database:
   path: /config/frigate.db
@@ -28,6 +39,10 @@ go2rtc:
       - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{FRIGATE_DOORBELL_IP}:554/h264Preview_01_main
     front_door_sub:
       - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{FRIGATE_DOORBELL_IP}:554/Preview_01_sub
+    backyard_floodlight:
+      - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{FRIGATE_FLOODLIGHT_IP}:554/h264Preview_01_main
+    backyard_floodlight_sub:
+      - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{FRIGATE_FLOODLIGHT_IP}:554/h264Preview_01_sub
   webrtc:
     candidates:
       - '{FRIGATE_HOST_IP}:8555'
@@ -116,6 +131,50 @@ cameras:
         coordinates: 0,480,640,480,640,200,0,200
         objects:
           - person
+    snapshots:
+      enabled: true
+      bounding_box: true
+    mqtt:
+      enabled: true
+      timestamp: true
+      bounding_box: true
+      crop: true
+
+  backyard_floodlight:
+    enabled: true
+    ffmpeg:
+      # Override global preset-nvidia-h264: main is HEVC, sub is h264 — preset-nvidia auto-detects.
+      hwaccel_args: preset-nvidia
+      inputs:
+        - path: rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{FRIGATE_FLOODLIGHT_IP}:554/h264Preview_01_sub
+          roles:
+            - detect
+            - audio
+        - path: rtsp://admin:{FRIGATE_RTSP_PASSWORD}@{FRIGATE_FLOODLIGHT_IP}:554/h264Preview_01_main
+          roles:
+            - record
+    detect:
+      enabled: true
+      width: 1280
+      height: 384
+      fps: 5
+    audio:
+      enabled: true
+    objects:
+      track:
+        - person
+        - car
+        - dog
+      filters:
+        person:
+          min_score: 0.6
+          threshold: 0.7
+        car:
+          min_score: 0.6
+          threshold: 0.7
+        dog:
+          min_score: 0.5
+          threshold: 0.65
     snapshots:
       enabled: true
       bounding_box: true
