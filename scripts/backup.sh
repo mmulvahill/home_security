@@ -21,7 +21,6 @@ cp .env.example "$TMP_BACKUP/"
 cp docker-compose.yml "$TMP_BACKUP/"
 cp -r frigate/config "$TMP_BACKUP/frigate-config"
 cp -r mosquitto/config "$TMP_BACKUP/mosquitto-config"
-cp double-take/config.yml "$TMP_BACKUP/double-take-config.yml" 2>/dev/null || true
 cp -r scripts "$TMP_BACKUP/"
 cp Makefile "$TMP_BACKUP/"
 

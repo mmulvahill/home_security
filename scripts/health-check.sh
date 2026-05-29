@@ -33,7 +33,7 @@ check_service() {
 }
 
 auto_restart() {
-    for svc in mqtt frigate compreface double-take; do
+    for svc in mqtt frigate; do
         if ! docker ps --format '{{.Names}}' | grep -q "^${svc}$"; then
             echo "Auto-restarting $svc..."
             docker compose -f "${PROJECT_DIR}/docker-compose.yml" up -d "$svc"
@@ -77,7 +77,7 @@ check_gpu() {
 }
 
 # Run checks
-for svc in mqtt frigate compreface double-take; do
+for svc in mqtt frigate; do
     check_service "$svc" || auto_restart
 done
 

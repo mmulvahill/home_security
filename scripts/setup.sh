@@ -90,8 +90,6 @@ ensure_directories() {
     local dirs=(
         frigate/config
         mosquitto/config mosquitto/data mosquitto/log
-        double-take
-        compreface/postgres
     )
     for d in "${dirs[@]}"; do
         mkdir -p "$d"
@@ -106,7 +104,7 @@ ensure_directories() {
 # --- Images ---
 ensure_images() {
     log_step "Pulling Docker images (may take a while on first run)..."
-    docker compose pull mqtt frigate compreface-postgres compreface-admin compreface-api compreface double-take
+    docker compose pull mqtt frigate
     log_info "Images up to date"
 }
 
@@ -114,7 +112,7 @@ ensure_images() {
 deploy_services() {
     log_step "Deploying services..."
 
-    local services=(mqtt frigate compreface-postgres compreface-admin compreface-api compreface double-take)
+    local services=(mqtt frigate)
     docker compose up -d "${services[@]}"
 
     # Wait for Frigate (slowest service - TensorRT model compilation on first run)
@@ -139,7 +137,7 @@ verify() {
     load_env
 
     local all_ok=true
-    for svc in mqtt frigate compreface double-take; do
+    for svc in mqtt frigate; do
         if docker ps --format '{{.Names}}' | grep -q "^${svc}$"; then
             log_info "$svc running"
         else
@@ -150,8 +148,6 @@ verify() {
 
     local endpoints=(
         "Frigate|http://localhost:5000/api/version"
-        "CompreFace|http://localhost:8000"
-        "Double-Take|http://localhost:3000"
     )
     for entry in "${endpoints[@]}"; do
         local name="${entry%%|*}" url="${entry#*|}"
@@ -169,8 +165,6 @@ verify() {
         log_info "======================================"
         echo ""
         echo "Frigate:     http://${HOST_IP}:5000"
-        echo "CompreFace:  http://${HOST_IP}:8000"
-        echo "Double-Take: http://${HOST_IP}:3000"
         echo ""
     else
         log_error "Some services failed. Check: docker compose logs"

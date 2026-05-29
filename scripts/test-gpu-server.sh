@@ -80,11 +80,6 @@ echo ""
 images=(
     "eclipse-mosquitto:2"
     "ghcr.io/blakeblackshear/frigate:stable-tensorrt"
-    "postgres:11.5"
-    "exadel/compreface-admin:latest"
-    "exadel/compreface-api:latest"
-    "exadel/compreface-fe:latest"
-    "jakowenko/double-take:latest"
 )
 for image in "${images[@]}"; do
     echo -n "Pulling $image... "

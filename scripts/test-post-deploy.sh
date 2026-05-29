@@ -40,22 +40,6 @@ else
     test_fail "cannot query Frigate stats"
 fi
 
-# CompreFace
-echo -n "CompreFace UI... "
-if curl -sf http://localhost:8000 &>/dev/null; then
-    test_pass "accessible"
-else
-    test_fail "not accessible"
-fi
-
-# Double-Take
-echo -n "Double-Take... "
-if curl -sf http://localhost:3000 &>/dev/null; then
-    test_pass "accessible"
-else
-    test_fail "not accessible"
-fi
-
 # MQTT message flow
 echo -n "MQTT from Frigate... "
 if timeout 30 mosquitto_sub -h localhost -t 'frigate/available' -C 1 &>/dev/null; then

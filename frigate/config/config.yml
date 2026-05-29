@@ -25,6 +25,14 @@ model:
   path: /config/model_cache/yolov9-s-320.onnx
   labelmap_path: /labelmap/coco-80.txt
 
+# Native face recognition (replaces the former CompreFace + Double-Take stack).
+# model_size: large = ArcFace embeddings, runs on GPU 1 in the stable-tensorrt
+# image. Runs on person detections; enroll known faces via the Frigate UI
+# (Settings -> Face Library). Models download automatically on first start.
+face_recognition:
+  enabled: true
+  model_size: large
+
 database:
   path: /config/frigate.db
 

@@ -4,7 +4,7 @@
         test-pre test-post test-camera
 
 COMPOSE := docker compose
-SERVICES := mqtt frigate compreface-postgres compreface-admin compreface-api compreface-core compreface double-take
+SERVICES := mqtt frigate
 
 help:
 	@echo "Home Security Stack"
@@ -70,8 +70,6 @@ status:
 	@echo "Endpoints"
 	@echo "======================================"
 	@echo "Frigate:     http://localhost:5000"
-	@echo "CompreFace:  http://localhost:8000"
-	@echo "Double-Take: http://localhost:3000"
 	@echo "MQTT:        mqtt://localhost:1883"
 
 logs:
