@@ -34,7 +34,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: ['0']
+              device_ids: ['1']
               capabilities: [gpu, video, compute]
     volumes:
       - /etc/localtime:/etc/localtime:ro
@@ -53,9 +53,11 @@ services:
     environment:
       - FRIGATE_RTSP_PASSWORD=${FRIGATE_RTSP_PASSWORD}
       - FRIGATE_DOORBELL_IP=${DOORBELL_IP}
+      - FRIGATE_FLOODLIGHT_IP=${FLOODLIGHT_IP}
       - FRIGATE_HOST_IP=${HOST_IP}
-      - NVIDIA_VISIBLE_DEVICES=0
+      - NVIDIA_VISIBLE_DEVICES=1
       - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+      - CUDA_VISIBLE_DEVICES=1
     depends_on:
       mqtt:
         condition: service_healthy
@@ -130,7 +132,7 @@ services:
     container_name: compreface
     restart: unless-stopped
     ports:
-      - "8000:80"
+      - "127.0.0.1:8000:80"
     depends_on:
       - compreface-admin
       - compreface-api
