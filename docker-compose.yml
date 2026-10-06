@@ -34,7 +34,9 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: ['1']
+              # Which GPU to run Frigate on. Defaults to 0 (correct for a
+              # single-GPU machine). Override via FRIGATE_GPU_ID in .env.
+              device_ids: ['${FRIGATE_GPU_ID:-0}']
               capabilities: [gpu, video, compute]
     volumes:
       - /etc/localtime:/etc/localtime:ro
@@ -55,9 +57,9 @@ services:
       - FRIGATE_DOORBELL_IP=${DOORBELL_IP}
       - FRIGATE_FLOODLIGHT_IP=${FLOODLIGHT_IP}
       - FRIGATE_HOST_IP=${HOST_IP}
-      - NVIDIA_VISIBLE_DEVICES=1
+      - NVIDIA_VISIBLE_DEVICES=${FRIGATE_GPU_ID:-0}
       - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
-      - CUDA_VISIBLE_DEVICES=1
+      - CUDA_VISIBLE_DEVICES=${FRIGATE_GPU_ID:-0}
     depends_on:
       mqtt:
         condition: service_healthy
@@ -86,7 +88,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: ['1']
+              device_ids: ['${FRIGATE_GPU_ID:-0}']
               capabilities: [gpu]
     ports:
       - "9000:9000"

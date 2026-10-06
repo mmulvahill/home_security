@@ -1,142 +1,80 @@
-# Quick Start Guide - Camera Deployment
+# Quick Start
 
-## When Your Camera Arrives
+The condensed version. For the full story (hardware, architecture, troubleshooting), see
+[README.md](README.md).
 
-### Step 1: Test Camera (5 minutes)
+## 1. Prerequisites (5 min)
+
+- Linux host with Docker + Docker Compose v2
+- NVIDIA GPU visible to Docker — verify:
+  ```bash
+  docker run --rm --gpus all nvidia/cuda:12.0.0-base-ubuntu22.04 nvidia-smi
+  ```
+- `nfs-common` if you're storing recordings on a NAS
+- An RTSP camera on your LAN (Reolink works out of the box)
+
+## 2. Configure (2 min)
+
 ```bash
-cd /mnt/storage/projects/home_security
+git clone <this-repo> home_security
+cd home_security
+cp .env.example .env
+nano .env      # camera password, camera IP(s), host IP, storage path
+```
 
-# Test camera connectivity
+**GPU not at index 0?** Set `FRIGATE_GPU_ID` in `.env`. The default is `0`, which is correct for a
+single-GPU machine, so most people don't need to touch it. See the README's
+[Hardware](README.md#hardware) section.
+
+## 3. Test your camera (2 min)
+
+```bash
 make test-camera IP=<camera-ip> PASS=<camera-password>
 ```
+Expect all checks to pass and a test frame to be captured.
 
-**Expected output**: All tests pass, test frame captured
+> Reolink doorbell? Its detect (sub) stream is `/Preview_01_sub` — no `h264` prefix. Everything else
+> Reolink uses `/h264Preview_01_sub`.
 
-### Step 2: Configure Camera in System (2 minutes)
-```bash
-# 1. Add camera IP to environment
-echo "DOORBELL_IP=<camera-ip>" >> .env
-
-# 2. Edit Frigate config
-nano frigate/config/config.yml
-# Uncomment the entire "cameras:" section at the bottom
-# (Lines starting with "# cameras:" through the end)
-```
-
-### Step 3: Restart Frigate (1 minute)
-```bash
-make restart-frigate
-
-# Watch logs to verify camera connection
-make logs-frigate
-```
-
-**Look for**: "front_door: ffmpeg sent a broken frame"... then "front_door: 10.0 fps"
-
-### Step 4: Verify in UI (2 minutes)
-1. Open: `http://<HOST_IP>:5000`
-2. Click "Cameras" → "front_door"
-3. Should see live stream within 30 seconds
-4. Click "Debug" → verify detection is running
-
-### Step 5: Configure Zones (Optional, 5 minutes)
-1. In Frigate UI, go to front_door camera
-2. Click "Mask & Zone Editor"
-3. Draw zones for areas you want to monitor (e.g., "porch", "driveway")
-4. Save and restart: `make restart-frigate`
-
-### Step 6: Test Face Recognition (10 minutes)
-1. Access Double-Take: `http://<HOST_IP>:3000`
-2. Wait for a person detection event
-3. Click on detected face
-4. Train the face with a name
-5. Next detection should recognize the person
-
-## Troubleshooting Quick Fixes
-
-### Camera not connecting?
-```bash
-# Check camera is reachable
-ping <camera-ip>
-
-# Verify RTSP credentials
-# Try accessing camera web UI: http://<camera-ip>
-
-# Check Frigate logs
-make logs-frigate | grep -i error
-```
-
-### No video in Frigate?
-```bash
-# Verify camera config is uncommented
-grep -A 5 "^cameras:" frigate/config/config.yml
-
-# Check RTSP stream directly
-ffplay rtsp://admin:<password>@<camera-ip>:554/h264Preview_01_sub
-```
-
-### Face recognition not working?
-```bash
-# Check CompreFace API key is set
-grep COMPREFACE_API_KEY .env
-
-# Verify Double-Take is connected
-make logs-double-take | grep -i compreface
-```
-
-## Common Commands
+## 4. Deploy (first run: a few min)
 
 ```bash
-# Restart everything
-make restart
-
-# View status
+make setup      # idempotent — safe to re-run
 make status
-
-# Check health
-make health
-
-# View logs
-make logs                  # All services
-make logs-frigate         # Just Frigate
-make logs-double-take     # Just Double-Take
 ```
+First run downloads the detection + face models, so give Frigate a minute or two to go healthy.
 
-## Next Steps After Camera Works
+## 5. Open the UI
 
-1. **Set up automations in Home Assistant**
-   - Person detection notifications
-   - Unknown face alerts
-   - Package detection
+```
+http://<your-host-ip>:5000
+```
+You should see your camera's live stream within ~30 seconds. Click **Debug** on a camera to watch
+detection run.
 
-2. **Configure retention**
-   - Edit `frigate/config/config.yml`
-   - Adjust `record.retain.days` as needed
+## 6. Enroll faces (optional)
 
-3. **Add more cameras**
-   - Use `test-camera.sh` for each new camera
-   - Add to Frigate config
-   - Restart: `make restart-frigate`
+In the Frigate UI: **Settings → Face Library**. Upload photos or assign faces from detection events.
+After enrolling, events get tagged with the person's name.
 
-4. **Enable automatic updates**
-   - `make update` pulls latest images
-   - Can add to weekly cron if desired
-
-## Emergency: System Not Working?
+## Common commands
 
 ```bash
-# Nuclear option: restart everything
-make stop
-make start
-
-# Check what's running
-docker ps
-
-# Check system health
-make health
-
-# View detailed logs
-docker compose logs --tail=100 --follow
+make status          # what's running + endpoints
+make logs-frigate    # tail Frigate logs
+make health          # health check
+make restart-frigate # restart just Frigate
+make update          # pull latest images + redeploy
+make help            # everything
 ```
 
-Need help? Check `VALIDATION_REPORT.md` and `README.md` for detailed troubleshooting.
+## Something broken?
+
+```bash
+docker logs frigate            # first place to look
+make test-camera IP=.. PASS=.. # camera reachable?
+nvidia-smi                     # GPU visible?
+```
+
+Most first-run failures are: GPU id wrong (single-GPU setups), bad camera credentials in `.env`, or the
+Reolink doorbell sub-stream path. See [README.md](README.md#troubleshooting) for the full list.
